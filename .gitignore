@@ -1,0 +1,5 @@
+#忽略执行文件.exe
+*.exe
+
+#忽略VScode的配置文件
+.vscode/

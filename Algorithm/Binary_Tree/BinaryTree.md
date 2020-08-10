@@ -13,7 +13,6 @@ void levelorder(TreeNode *root)
     while(!q.empty())
     {
         int q_size = q.size();  // 注意这里是固定队列的大小，在遍历的过程中队列大小会发生变化
-        res++;
         for(int i = 0; i < q_size; i++)
         {
             TreeNode *node = q.front();
