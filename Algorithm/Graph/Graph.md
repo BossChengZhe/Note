@@ -22,7 +22,7 @@ for (int i = 0; i < Node_Num; i++)
 }
 ```
 
-### 图的深度优先队列(递归版本)
+### 图的深度优先队列
 
 ```C++
 void DFS(int node, vector<bool> &visit, vector<vector<bool>> &graph)
@@ -36,11 +36,50 @@ void DFS(int node, vector<bool> &visit, vector<vector<bool>> &graph)
 }
 ```
 
+#### 连通子图
+
+图的深度优先遍历和广度优先遍历都可以实现连通子图，但是深度优先遍历代码简单的一
+
+```C++
+void dfs(vector<vector<bool>> &graph, vector<int> &res, vector<bool> &visit, int node)
+// res存储连通子图内的节点，node表示当前遍历到的节点
+{
+    for(int i = 0; i < graph.size(); i++)
+    {
+        if(graph[node][i] && !visit[i]){ 
+            res.push_back(i);
+            visit[i] = true;
+            dfs(graph, res, visit, i);
+        }
+    }
+}
+
+vector<bool> visit(n, false);
+vector<vector<int>> res;
+for(int i = 0; i < n; i++)
+{
+    // 从每个节点开始依次遍历，如果子图是连通的，所有的节点肯定能够遍历到
+    vector<int> tmp;
+    if(!visit[i])
+    { 
+        visit[i] = true;
+        tmp.push_back(i);
+        dfs(graph, tmp, visit, i);
+        sort(tmp.begin(), tmp.end());
+        res.push_back(tmp);
+    }
+}
+```
+
+
+
 ### Dijkstra算法：
 
 #### Dijkstra算法框架
 
-在今年师兄笔试的时候遇见过Dijkstra算法，在此记录下Dijkstra算法的框架和原理。
+在今年师兄笔试的时候遇见过Dijkstra算法，在此记录下Dijkstra算
+
+法的框架和原理。
 
 1. 初始化集合`S`和`U`，其中结合`S`表示已经存在于最小生成树中的节点，`U`中节点都不在最小生成树中
 

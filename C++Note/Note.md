@@ -205,9 +205,119 @@
   Sales_data (const std::string &s, unsigned n, double p):bookNo (s) , units_sold (n) , revenue (p*n) {}
   ```
 
+* `class`和`struct`的区别：默认的访问权限，`class`的默认权限是`private`，而`strcut`默认`pubilc`
+
+- 定义在类内部的成员函数是自动`inline`的
+
+- `mutable`：可以修改类内数据成员，即使是在`const`成员函数内
+
+  ```C++
+  class Screen
+  {
+  public:
+      void some_member() const;
+  private：
+      mutable size_t access_ctr； //即使在一个const对象内也能被修改
+      //其他成员与之前的版本一致
+  };
+  void Screen::some_member() const
+  {
+       ++access_ctr;   //保存一个计数值，用于记录成员函数被调用的次数
+       //该成员需要完成的其他工作
+  }
+  ```
+
+- 提供类内初始值时，必须以符号`=`或者花括号表示
+
+- 函数的返回类型出现在函数名之前：因此当成员函数定义在类的外部时，返回类型中使用的名字都位于类的作用域之外。这时，返回类型必须指明它是哪个类的成员
+
+  ```C++
+  class window_mgr {
+  public:
+      //向窗口添加一个Screen，返回它的编号
+      ScreenIndex addScreen (const Screen&);   //其他成员与之前的版本一致
+  };
+  //首先处理返回类型，之后我们才进入window mgr的作用域
+  Window_mgr:: ScreenIndex
+  window_mgr::addScreen (const Screen &s)
+  {
+      screens.push_back(s);
+      return screens.size()-1;
+  }
+  ```
+
+- 成员定义中普通块作用域中的名字查找
+  - 在成员函数内查找该名字的声明。和前面一样，只有在函数使用之前出现的声明才被考虑。如下例，函数`dummy_fcn`中`height`会隐藏了同名的成员，**所以不建议在成员函数中使用和成员变量一样名称的参数**
   
+  ```C++
+  //注意：这段代码仅为了说明而用，不是一段很好的代码
+  //通常情况下不建议为参数和成员使用同样的名字
+  int height;        //定义了一个名字，稍后将在screen中使用
+  class Screen {
+  public:
+      typedef std::string::size type pos;
+      void dummy_fcn (pos height) {
+  		cursor = width* height;     // 哪个height？是那个参数
+  	}
+  private:
+      pos cursor =0;
+      pos height =0, width =0;
+  };
+  ```
+  
+  - 如果在成员函数内没有找到，则在类内继续查找，这时类的所有成员都可以被考虑
+  - 类内也没找到该名字的声明，在成员函数定义之前的作用域内继续查找。当成员定义在类的外部时，名字查找的第三步不仅要考虑类定义之前的全局作用域中的声明，还需要考虑在成员函数定义之前的全局作用域中的声明；请注意，全局函数`verify`的声明在`screen`类的定义之前是不可见的。然而，名字查找的第三步包括了成员函数出现之前的全局作用域。在此例中， `verify`的声明位于`setHeight`的定义之前，因此可以被正常使用。
+  
+  ```C++
+  int height;         //定义了一个名字，稍后将在Screen中使用
+  class Screen{
+  public:
+      typedef std::string::size type pos;
+      void setHeight (pos);
+      pos height = 0; //隐藏了外层作用域中的height
+  };
+  Screen::pos verify (Screen::pos); // 全局函数，只是返回数据类型和参数类型是类Screen中的类型声明
+  void Screen:: setHeight (pos var){
+      // var：参数
+      // height：类的成员
+      // verify：全局函数
+      height = verify (var);
+  }
+  ```
+
+- 如果成员是`const`、引用，或者属于某种未提供默认构造函数的类类型，我们必须通过构造函数初始值列表为这些成员提供初值。
 
 
+```C++
+//正确：显式地初始化引用和const成员
+ConstRef: : ConstRef(int ii): i(ii), ci(ii), ri(i) {}
+```
 
+- 成员的初始化顺序与它们在类定义中的出现顺序一致：第一个成员先被初始化，然后第二个，以此类推
 
+  ```C++
+  class x{
+      int i；
+      int j；
+  public：
+      //未定义的： i在j之前被初始化
+      x(int val) : j(val), i(j) {}
+  };
+  ```
 
+- 委托构造函数，将自己的职责委托给其他的构造函数执行
+
+  ```C++
+  class Sales data {
+  public：
+  	//非委托构造函数使用对应的实参初始化成员
+      sales data(std::string s, unsigned cnt, double price):bookNo (s), units sold (cnt), revenue (cnt*price) {}
+      //其余构造函数全都委托给另一个构造函数
+      Sales data() : Sales data ("", 0, 0) {}
+      Sales data(std: :string s): Sales data (s, 0,0) {}
+      Sales data (std::istream &is): Sales data ()
+      											{read (is, *this);}
+  };
+  ```
+
+  
