@@ -33,4 +33,60 @@ CC=
 make -C subdir # 进入指定的目录下
 ```
 
-进入`subdir`并执行`make`命令，我们把这个Makefile 叫做“总控Makefile”。
+进入`subdir`并执行`make`命令，我们把这个Makefile 叫做“总控Makefile”。	
+
+#### 示例
+
+```makefile
+# 阶段1
+all: add.c sub.c div.c mul.c main.c
+	gcc add.c sub.c div.c mul.c main.c -o app
+# 阶段2
+add: add.o sub.o div.o mul.o main.o
+	gcc add.o sub.o div.o mul.o main.o -o app
+add.o: add.c
+	gcc -c add.c
+sub.o: sub.c
+	gcc -c sub.c
+div.o: div.c
+	gcc -c div.c
+mul.o: mul.c
+	gcc -c mul.o
+# 阶段3
+#obj=add.o sub.o mul.o div.o main.o
+src = $(wildcard *.c)
+obj = $(patsubst %.c, %.o, $(src))
+target = app
+$(target):$(obj)
+	gcc $(obj) -o $(target)
+#$@表示目标，$^表示所有依赖，$<表示依赖中的第一个
+%o:%c
+	gcc -c $< -o $@
+# 阶段4
+CPPFLAGS=-Iinclude
+CFLAGS=-g -Wall
+LDFLAGS= -L../lib -lmycalc
+CC=gcc
+
+src = $(wildcard *.c)
+obj = $(patsubst %.c, %.o, $(src))
+target = app
+$(target):$(obj)
+	$(cc) $^ $(LDFLAGS) -o $(target)
+%o:%c
+	$(cc) -c $< $(CFLAGS) $(CPPFLAGS) -o $@
+
+.PHONE: clean
+clean: 
+	-rm -f *.o
+	-rm -f app
+# "-"表示词条命令出错，make也会继续执行后续的命令“-rm -f main.o”
+# "@"不显示命令本身，只显示结果“@echo "clean done"”
+
+# 彻底清除生成过程文件和生成配置文件
+distclean:
+	rm  /usr/bi/app
+install:
+	cp app /usr/bin
+```
+
