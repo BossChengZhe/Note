@@ -191,6 +191,13 @@ TCP协议为了实现可靠传输，在三次握手的实现过程中设置了�
 2. 为使旧的数据包在网络因过期而消失
    因某些原因，我们先关闭，接着很快以相同的四元组建立一条新连接。本文前面介绍过，TCP连接由四元组唯一标识，因此，在我们假设的情况中，TCP协议栈是无法区分前后两条TCP连接的不同的，在它看来，这根本就是同一条连接，中间先释放再建立的过程对其来说是“感知”不到的。这样就可能发生这样的情况：前一条TCP连接由local peer发送的数据到达remote peer后，会被该remot peer的TCP传输层当做当前TCP连接的正常数据接收并向上传递至应用层，从而引起数据错乱进而导致各种无法预知的诡异现象。作为一种可靠的传输协议，TCP必须在协议层面考虑并避免这种情况的发生，这正是TIME_WAIT状态存在的第2个原因。
 
+##### 网络故障的排查方法(字节)
+
+1. 首先测试本地局域网下的两台机器是否可以连接，可以使用ping命令，排除DHCP动态分配IP地址用完的问题
+2. 验证了源主机和目标主机的IP地址配置，可以验证域名解析是否正常工作，常用命令为`nslookup`命令，确保DNS服务器地址解析没有出现问题
+3. 验证网络路径，最简单的为`tracert`命令，如果某些跃点被报告为“请求超时”，无需太担心，因为这只意味着主机配置为不响应ICMP消息。重要的是确保Tracert不会显示目的地无法到达
+4. 测试远程主机的响应能力，可以使用建立远程连接的会话如xshell等测试远程主机的响应能力
+
 #### C++
 
 > 问题累计
@@ -1011,3 +1018,257 @@ PCB（进程控制块）
 ##### 虚拟内存和物理内存的联系
 
 ![虚拟内存和物理内存的联系](../Image/虚拟内存与物理内存的联系.png)
+
+#### 数据库
+
+##### 乐观锁与悲观锁
+
+1. 悲观锁：当我们要对一个数据库中的一条数据进行修改的时候，为了避免同时被其他人修改，最好的办法就是直接对该数据进行加锁以防止并发。这种借助数据库锁机制在修改数据之前先锁定，再修改的方式被称之为悲观并发控制
+
+   > 悲观锁的实现方式
+   >
+   > 1. 在对记录进行修改前，先尝试为该记录加上排他锁
+   > 2. 如果加锁失败，说明该记录正在被修改，那么当前查询可能要等待或者抛出异常。具体响应方式由开发者根据实际需要决定。
+   > 3. 如果成功加锁，那么就可以对记录做修改，事务完成后就会解锁了。
+   > 4. 其间如果有其他事务对该记录做加锁的操作，都要等待当前事务解锁或直接抛出异常。
+
+2. 乐观锁：乐观锁假设数据一般情况下不会造成冲突，所以在数据进行提交更新的时候，才会正式对数据的冲突与否进行检测，如果发现冲突了，则让返回用户错误的信息，让用户决定如何去做。
+
+   > 使用乐观锁就不需要借助数据库的锁机制了，乐观锁的概念中其实已经阐述了他的具体实现细节：主要就是两个步骤：冲突检测和数据更新。其实现方式有一种比较典型的就是**Compare and Swap(CAS)技术**：CAS是项乐观锁技术，当多个线程尝试使用CAS同时更新同一个变量时，只有其中一个线程能更新变量的值，而其它线程都失败，**失败的线程并不会被挂起，而是被告知这次竞争中失败，并可以再次尝试。**
+   >
+   > - 使用版本号
+   > - 使用时间戳
+
+#### 设计模式
+
+[参考①](https://www.cnblogs.com/chengjundu/p/8473564.html)
+
+##### 工厂模式
+
+在工厂模式中，我们在创建对象时不会对客户端暴露创建逻辑，并且是通过使用一个共同的接口来指向新创建的对象。工厂模式作为一种创建模式，一般在创建复杂对象时，考虑使用；在创建简单对象时，建议直接new完成一个实例对象的创建。
+
+###### 简单工厂模式
+
+##### 单例模式
+
+单例模式顾名思义，保证一个类仅可以有一个实例化对象，并且提供一个可以访问它的全局接口
+
+- 单例类只能由一个实例化对象。
+- 单例类必须自己提供一个实例化对象。
+- 单例类必须提供一个可以访问唯一实例化对象的接口。
+
+###### 懒汉模式
+
+不到万不得已就不会去实例化类，也就是说在第一次用到类实例的时候才会去实例化一个对象。在访问量较小，甚至可能不会去访问的情况下，采用懒汉实现，这是以时间换空间。
+
+```c++
+std::mutex mt;
+
+class Singleton
+{
+public:
+    static Singleton* getInstance();
+private:
+    Singleton(){}                                    //构造函数私有
+    Singleton(const Singleton&) = delete;            //明确拒绝
+    Singleton& operator=(const Singleton&) = delete; //明确拒绝
+
+    static Singleton* m_pSingleton;
+
+};
+Singleton* Singleton::m_pSingleton = NULL;
+
+Singleton* Singleton::getInstance()
+{
+    if(m_pSingleton == NULL)
+    {
+        mt.lock();                                  // 互斥量锁住，保证线程安全
+        if(m_pSingleton == NULL)
+        {
+            m_pSingleton = new Singleton();
+        }
+        mt.unlock();
+    }
+    return m_pSingleton;
+}
+```
+
+###### 饿汉模式
+
+单例类定义的时候就进行实例化。在访问量比较大，或者可能访问的线程比较多时，采用饿汉实现，可以实现更好的性能。这是以空间换时间。
+
+```c++
+//饿汉式：线程安全，注意一定要在合适的地方去delete它
+class Singleton
+{
+public:
+    static Singleton* getInstance();
+private:
+    Singleton(){}                                    //构造函数私有
+    Singleton(const Singleton&) = delete;            //明确拒绝
+    Singleton& operator=(const Singleton&) = delete; //明确拒绝
+
+    static Singleton* m_pSingleton;
+};
+
+Singleton* Singleton::m_pSingleton = new Singleton();
+
+Singleton* Singleton::getInstance()
+{
+    return m_pSingleton;
+}
+```
+
+##### 策略模式
+
+策略模式是指定义一系列的算法，把它们单独封装起来，并且使它们可以互相替换，使得算法可以独立于使用它的客户端而变化，也是说这些算法所完成的功能类型是一样的，对外接口也是一样的，只是不同的策略为引起环境角色环境角色表现出不同的行为。
+
+##### 观察者模式
+
+定义对象间的一种一对多的依赖关系，当一个对象的状态发生改变时，所有依赖于它的对象都要得到通知并自动更新。
+
+```c++
+/*
+* 关键代码：在目标类中增加一个ArrayList来存放观察者们。
+*/
+#include <iostream>
+#include <list>
+#include <memory>
+
+using namespace std;
+
+class View;
+
+//被观察者抽象类   数据模型
+class DataModel
+{
+public:
+    virtual ~DataModel(){}
+    virtual void addView(View* view) = 0;
+    virtual void removeView(View* view) = 0;
+    virtual void notify() = 0;   //通知函数
+};
+
+//观察者抽象类   视图
+class View
+{
+public:
+    virtual ~View(){ cout << "~View()" << endl; }
+    virtual void update() = 0;
+    virtual void setViewName(const string& name) = 0;
+    virtual const string& name() = 0;
+};
+
+//具体的被观察类， 整数模型
+class IntDataModel:public DataModel
+{
+public:
+    ~IntDataModel()
+    {
+        m_pViewList.clear();
+    }
+
+    virtual void addView(View* view) override
+    {
+        shared_ptr<View> temp(view);
+        auto iter = find(m_pViewList.begin(), m_pViewList.end(), temp);
+        if(iter == m_pViewList.end())
+        {
+            m_pViewList.push_front(temp);
+        }
+        else
+        {
+            cout << "View already exists" << endl;
+        }
+    }
+
+    void removeView(View* view) override
+    {
+        auto iter = m_pViewList.begin();
+        for(; iter != m_pViewList.end(); iter++)
+        {
+            if((*iter).get() == view)
+            {
+                m_pViewList.erase(iter);
+                cout << "remove view" << endl;
+                return;
+            }
+        }
+    }
+
+    virtual void notify() override
+    {
+        auto iter = m_pViewList.begin();
+        for(; iter != m_pViewList.end(); iter++)
+        {
+            (*iter).get()->update();
+        }
+    }
+
+private:
+    list<shared_ptr<View>> m_pViewList;
+};
+
+//具体的观察者类    表视图
+class TableView : public View
+{
+public:
+    TableView() : m_name("unknow"){}
+    TableView(const string& name) : m_name(name){}
+    ~TableView(){ cout << "~TableView(): " << m_name.data() << endl; }
+
+    void setViewName(const string& name)
+    {
+        m_name = name;
+    }
+
+    const string& name()
+    {
+        return m_name;
+    }
+
+    void update() override
+    {
+        cout << m_name.data() << " update" << endl;
+    }
+
+private:
+    string m_name;
+};
+
+int main()
+{
+    /*
+    * 这里需要补充说明的是在此示例代码中，View一旦被注册到DataModel类之后，DataModel解析时会自动解析掉     * 内部容器中存储的View对象，因此注册后的View对象不需要在手动去delete，再去delete View对象会出错。
+    */
+
+    View* v1 = new TableView("TableView1");
+    View* v2 = new TableView("TableView2");
+    View* v3 = new TableView("TableView3");
+    View* v4 = new TableView("TableView4");
+
+    IntDataModel* model = new IntDataModel;
+    model->addView(v1);
+    model->addView(v2);
+    model->addView(v3);
+    model->addView(v4);
+
+    model->notify();
+
+    cout << "-------------\n" << endl;
+
+    model->removeView(v1);
+
+    model->notify();
+
+    delete model;
+    model = nullptr;
+
+    return 0;
+}
+
+```
+
+##### 策略模式
+
+定义一系列算法，将他们一个个封装起来，并且他可以相互替换，该模式可以使得算法独立于使用他的客户程序变化；比如定义各国税的计算方式
