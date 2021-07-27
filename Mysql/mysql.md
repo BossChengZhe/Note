@@ -1344,8 +1344,33 @@ SELECT test233(89)$
 iterate类似于continue，继续，结束本次循环，继续下一次
 leave 类似于 break，跳出，结束当前所在的循环
 
-| method | database |      |      |      |      |      |
-| :----: | :------: | :--: | :--: | :--: | :--: | :--: |
-|        |          |      |      |      |      |      |
-|        |          |      |      |      |      |      |
+#### 索引
+
+##### 索引创建
+
+```mysql
+# 直接创建
+CREATE INDEX index_name ON table(column(length))
+# 修改表的形式
+ALTER TABLE table_name ADD INDEX index_name ON (column(length))
+# 创建表的时候创建索引
+CREATE TABLE `table` (
+	`id` int(11) NOT NULL AUTO_INCREMENT ,
+	`title` char(255) CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL ,
+	`content` text CHARACTER SET utf8 COLLATE utf8_general_ci NULL ,
+	`time` int(10) NULL DEFAULT NULL ,
+	PRIMARY KEY (`id`),
+	INDEX index_name (title(length))
+)
+
+# 创建唯一索引：索引列的值必须唯一，但允许有空值。如果是组合索引，则列值的组合必须是唯一的，创建方法和普通索引类似
+CREATE UNIQUE INDEX index_name ON table(column(length)) 
+
+# 组合索引：
+ALTER TABLE article ADD INDEX index_titme_time (title(50),time(10))
+# 建立这样的组合索引，其实是相当于分别建立了下面两组组合索引：为什么没有time这样的组合索引呢？这是因为MySQL组合索引“最左前缀”的结果。
+# 简单的理解就是只从最左面的开始组合。并不是只要包含这两列的查询都会用到该组合索引，如下面的几个SQL所示：
+–title,time
+–title
+```
 
