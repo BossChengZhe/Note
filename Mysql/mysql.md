@@ -1491,3 +1491,96 @@ ALTER TABLE article ADD INDEX index_titme_time (title(50),time(10))
      对于MyISAM存储引擎优化COUNT（*）操作，不必等到执行阶段再进行计算，查询执行计划生成的阶段即完成优化。
   8. distinct：优化distinct操作，在找到第一匹配的元组后即停止找同样值的动作
 
+####  Join优化
+
+1. 尽量减少Join语句中的NestedLoop的循环总次数，**永远用小表驱动大表**
+2. 保证Join语句中北区东表上的Join条件字段已被索引
+3. 当无法保证被驱动表的Join条件字段被索引且内存资源充足的前提下，不要太吝惜JoinBuffer的设置；
+
+```mysql
+# 由于jobs表中存在默认的主键索引，在左外连接时，会用到右表索引；同理右外连接时候，会用到做表部分索引
+EXPLAIN
+SELECT e.last_name ,e.employee_id 
+FROM employees e
+LEFT JOIN jobs j
+ON e.job_id = j.job_id
+WHERE e.salary > 1000;
+```
+
+![Join优化](../Image/Join优化.png)
+
+##### 避免索引失效的方式
+
+1. 全值匹配我最爱
+
+2. 最佳左前缀法则(带头大哥不能死，中间兄弟不能断 )
+   如果索引了多列，要遵守**最左前缀法则**。指的是查询从索引的最左前列开始并且不跳过索引中的列。
+
+   > 最左前缀法则：mysql会一直向右匹配直到遇到范围查询(>、<、between、like)就停止匹配（包括`like '陈%'`这种）
+
+3. 不在索引列上做任何操作（计算、函数、（自动or手动）类型转换），会导致索引失效而转向全表扫描
+
+4. 存储引擎不能使用索引中范围条件右边的列
+
+5. 尽量使用覆盖索引（只访问索引的查询（索引列和查询列一致）），减少select
+
+   > **覆盖索引**：索引列和查询列相同，SQL只需要通过索引就可以返回查询所需要的数据，而不必通过二级索引查到主键之后再去查询数据。
+
+6. mysql 在使用不等于（！＝或者＜＞）的时候无法使用索引会导致全表扫描
+
+7. is null ，is not null 也无法使用索引
+
+8. like以通配符开头（＇％abc...＇）mysql索引失效会变成全表扫描的操作
+
+   > 可以使用**覆盖索引**解决必须使用'%aa%'双百分号问题
+
+9. 字符串不加单引号索引失效，即不能出现隐式的类型转换
+
+10. 少用or，用它来连接时会索引失效
+
+##### 索引建立建议
+
+1. 对于单键索引，尽量选择针对当前query过滤性更好的索引
+2. 在选择组合索引的时候，当前Query中过滤性最好的字段在索引字段顺序中，位置越靠前越好。
+3. 在选择组合索引的时候，尽量选择可以能够包含当前query中的where字句中更多字段的索引
+4. 尽可能通过分析统计信息和调整query的写法来达到选择合适索引的目的
+
+##### 小表驱动大表
+
+```mysql
+select * from A where id in (select id from B) 
+# 等价于
+for select id from B
+for select * from A where A.id =B.id
+# 当B表的数据集必须小于A表的数据集时，用in优于exists
+
+select * from A where exists (select 1 from B where B.id=A.id) 2
+# 等价于
+for select * from A
+or select * from B where B.id = A.id
+# 当A表的数据集系小于B表的数据集时，用exists
+# 注意： A表与B表的ID字段应建立索引。
+```
+
+> **`in` 和 `exists`的区别**: 如果子查询得出的结果集记录较少，主查询中的表较大且又有索引时应该用in, 反之如果外层的主查询记录较少，子查询中的表大，又有索引时使用exists。其实我们区分in和exists主要是造成了驱动顺序的改变(这是性能变化的关键)，如果是exists，那么以外层表为驱动表，先被访问，如果是IN，那么先执行子查询，所以我们会以驱动表的快速返回为目标，那么就会考虑到索引及结果集的关系了 ，另外IN时不对NULL进行处理。
+
+##### 提升`order by`速度
+
+1. Order by时select＊是一个大忌只Query需要的字段，这点非常重要。在这里的影响是
+   - 当Query的字段大小总和小于max_length_for_sort_data 而且排序字段不是TEXT｜BLOB类型时，会用改进后的算法--单路排序，否则用老算法——多路排序。
+   - 种算法的数据都有可能超出sort_buffer的容量，超出之后，会创建tmp文件进行合并排序，导致多次I／O，但是用单路排序算法的风险会更大一些，所以要提高sort_buffer_size。
+2. 尝试提高 sort_buffer_size
+   不管用哪种算法，提高这个参数都会提高效率，当然，要根据系统的能力去提高，因为这个参数是针对每个进程的
+3. 尝试提高max_length_for_sort_data
+   提高这个参数，会增加用改进算法的概率。但是如果设的太高，数据总容量超出sort_buffer_size的概率就增大，明显症状是高的磁盘I／O活动和低的处理器使用率.
+
+##### 慢查询日志
+
+- MySQL的慢查询日志是MySQL提供的一种日志记录，它用来记录在MySQL中响应时间超过阀值的语句，具体指运行时间超过long_query_time值的SQL，则会被记录到慢查询日志中
+
+- 具体指运行时间超过long_query_time值的SQL，则会被记录到慢查询日志中。long_query_time的默认值为 10，意思是运行10秒以上的语句。
+
+- 由他来查看哪些SQL超出了我们的最大忍耐时间值，比如一条sql执行超过5秒钟，我们就算慢SQL，希望能收集超过5秒的sql，结合之前explain进行全面分析。
+
+  > 开启记录方法为`set global slow_query_time=1`
+
