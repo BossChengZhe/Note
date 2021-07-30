@@ -1584,3 +1584,186 @@ or select * from B where B.id = A.id
 
   > 开启记录方法为`set global slow_query_time=1`
 
+##### 脚本生成千万级数据
+
+ 
+
+```mysql
+create database bigData;
+use bigData;
+
+# 建表dept
+CREATE TABLE dept(
+	id INT UNSIGNED PRIMARY KEY AUTO INCREMENT, 
+    deptno MEDIUMINT UNSIGNED NOT NULL DEFAULT O,
+    dname VARCHAR(20) NOT NULL DEFAULT '',
+	loc VARCHAR(13) NOT NULL DEFAULT ''
+) ENGINE-INNODB DEFAULT CHARSET-GBK;
+
+# 建表emp
+CREATE TABLE emp(
+	id INT UNSIGNED PRIMARY KEY AUTO INCREMENT,
+	empno MEDIUMINT UNSIGNED NOT NULL DEFAULT 0, # 编号 
+    ename VARCHAR(20) NOT NULL DEFAULT '', # 名字
+	ob VARCHAR(9) NOT NULL DEFAULT '', # 工作
+	mgr MEDIUMINT UNSIGNED NOT NULL DEFAULT O, # 上级编号 
+    hiredate DATE NOT NULL, # 入职时间
+	sal DECIMAL(7,2) NOT NULL, # 薪水 
+    comm DECIMAL(7,2) NOT NULL, # 红利
+	deptno MEDIUMINT UNSIGNED NOT NULL DEFAULT 0 #部门编号
+)ENGINE=INNODB DEFAULT CHARSET-GBK;
+
+# 设置二进制日志开启(大规模数据不会报错)
+show variables like 'log_bin_trust_function_creators';
+set global log_bin_trust_function_creators=1;
+
+# 生成随机字符串
+DELIMITER $$
+CREATE FUNCTION rand_string(n INT) RETURNS VARCHAR(255)
+BEGIN
+	DECLARE chars _str VARCHAR(100) DEFAULT 'abcdefghijklmnopgrstuvwxyzABCDEFJHIJKLMNOPQRSTUVWXYZ'; 
+	DECLARE return _str VARCHAR(255) DEFAULT '';
+	DECLARE i INT DEFAULT 0; 
+	WHILE i < n DO
+		SET return_str=CONCAT(return_str,SUBSTRING(chars_str,FLOOR(1+RAND()*52), 1)); 
+		SETi=i+1;
+	END WHILE
+RETURN return_str;
+END $$
+
+# 用于随机产生部门编号
+DELIMITER $$
+CREATE FUNCTION rand_num() RETURNS INT(5)
+BEGIN
+	DECLARE i INT DEFAULT 0;
+	SET i = FLOOR(100+RAND()*10); 
+	RETURN i;
+END $$
+
+# 创建存储过程
+DELIMITER $$
+CREATE PROCEDURE insert_emp(IN START INT(10),IN max_num INT(10))
+BEGIN
+	DECLARE  INT DEFAULT 0;
+	set autocommit=0;  # 把autocommit设置成0
+	REPEAT SET i =i+1;
+		INSERT INTO emp (empno, ename ,job ,mgr ,hiredate ,sal ,comm 	,deptno) VALUES ((START+i)) 		,rand_string(6),'SALESMAN',0001,CURDATE(),2000,400,rand_num();
+		UNTIL i =max_num
+	END REPEAT;
+	COMMIT;
+END $$
+ 
+# 执行存储过程，往dept表添加随机数据
+DELIMITER $$
+CREATE PROCEDURE insert_dept(IN START INT(10),IN max_num INT(10))
+DECLARE i INT DEFAULT 0;
+SET autocommit = 0;
+REPEAT
+	SETi=i+1;
+	INSERT INTO dept (deptno ,dname,loc) VALUES ((START+i) ,rand_string(10),rand_string(8));
+	UNTIL i =max_num
+END REPEAT;
+COMMIT;
+END $$
+```
+
+##### Show Profile
+
+​	是mysql提供可以用来分析当前会话中语句执行的资源消耗情况。可以用于SQL的调优的测量
+
+1. 查看当前版本是否支持 
+
+2. 开启 `set profiling=on;`
+
+3. 运行sql语句
+
+4. 诊断CPU，`show profiles;` `show profile cpu, block io for query 10 #id为10的查询各步骤时间占用 `
+
+   > - ALL：显示所有的开销信息
+   > - BLOCK IO：显示块I/O相关开销
+   > - CONTEXT SWITCHES：上下文切换相关开销
+   > - CPU：显示CPU相关开销信息
+   > - IPC：显示发送和接收相关开销信息
+   > - MEMORY：示内存相关开销信息
+   > - PAGE FAULTS：示页面错误相关开销信息
+   > - SOURCE：显示和Source-function, Source file, Sourceline相关的开销信息 
+   > - SWAPS：显示交换次数相关开销的信息
+
+   > **常见问题展示**
+   >
+   > `converting HEAP to MyISAM`：查询结果太大，内存都不够用了往磁盘上搬了。
+   >
+   > `Creating tmp table`：创建临时表，拷贝数据到临时表用完再删除
+   >
+   > `Copying to tmp table on disk`：把内存中临时表复制到磁盘,危险
+   >
+   > `locked`
+
+##### 读写锁
+
+```mysql
+# 读锁和写锁
+lock table mylock read, book write;
+
+# 释放表
+unlock tables;
+
+# 查看上锁的表
+show open tables;
+```
+
+> 当前session对table加上**读锁**，session只能够读取当前上锁的的table，不能够读取其他表，也不能修改加了读锁的table
+>
+> 其余session能够读取上读锁的table，也能够读其他表，对读锁table的写入操作会被阻塞，直至读锁被释放
+>
+>
+> 当前session对table加了**写锁**，拥有对table的完全控制权，但不能够读其他表格
+>
+> 其他session对table的查询被阻塞，需要等待锁被释放
+
+`Table_locks_immediate`：产生表级锁定的次数，表示可以立即获取锁的查询次数，每立即获取锁值加1；
+
+`Table_locks_waited`：出现表级锁定争用而发生等待的次数（不能立即获取锁的次数，每等待一次锁值加1），此值高则说明存在着较严重的表级锁争用情况；
+
+> Myisam的读写锁调度是写优先，这也是myisam不适合做写为主表的制擎。因为写锁后，其他线程不能做任何操作，大量的更新会使查询很难得到锁，从而造成永远阻塞
+>
+> InnoDB与MyISAM的最大不同有两点：一是支持事务（TRANSACTION）；二是采用了行级锁
+
+##### 隔离级别
+
+常看当前数据库的事务隔离级别：`show variables like 'tx_isolation'`； 
+
+##### 无索引行锁升级为表锁
+
+  `update tables set a=100 where b=90001` 这里b是varchar型，但是发生隐式转换，索引失效
+
+##### 锁定某一行
+
+```mysql
+begin; 
+select * from table_name where a=8 for update;            # 锁定某一行后，其他操作会被阻塞，直到锁定行的会话提交commit
+
+commit;
+```
+
+##### 行锁分析
+
+```mysql
+# 检查InnoDb_row_lock系统变量分析系统上的行锁争夺情况
+show status like 'InnoDb_row_lock%';
+/*
+InnoDb_row_lock_current_waits：当前正在等待锁定的数量
+InnoDb_row_lock_time：从系统启动到现在锁定总时间长度
+InnoDb_row_lock_avg：每次等待所花平均时间;
+InnoDb_row_lock_max：从系统启动到现在等待最常的一次所花的时间；
+InnoDb_row_lock_waits：系统启动后到现在总共等待的次数;
+*/
+```
+
+##### 主从复制
+
+MysQL复制过程分成三步：
+
+1. master将改变记录到二进制日志(binary log) 。这些记录过程叫做二进制日志事件, binary log events;
+2. slave将master的binary log events拷贝到它的中继日志(relay log) ;
+3. slave重做中继日志中的事件，将改变应用到自己的数据库中。MysQL复制是异步的且串行化的
