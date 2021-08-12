@@ -625,7 +625,7 @@ const名叫常量限定符，用来限定特定变量，以通知编译器该变
 
 ##### 类内存分布以及虚函数表
 
-​	[参考](https://www.cnblogs.com/jerry19880126/p/3616999.html)，
+​	[参考1](https://www.cnblogs.com/jerry19880126/p/3616999.html)、[gdb分析C++对象内存布局(一)](https://zhuanlan.zhihu.com/p/90726313)、[gdb分析C++对象内存布局(二)](https://zhuanlan.zhihu.com/p/90770282)
 
 ##### 多态
 
@@ -1432,6 +1432,8 @@ PCB（进程控制块）
 
 ###### [redo log](https://blog.csdn.net/weixin_39673184/article/details/110924034)
 
+​	redo 日志的通用结构，redo 日志记录的是每个页面(page)更改**物理**情况，所以 redo 日志整体来说是比较小的
+
 1. redo log结构
    ![image-20210809163905149](../Image/question/image-20210809163905149.png)
   - type：该条redo日志的类型
@@ -1462,6 +1464,8 @@ PCB（进程控制块）
    - **2**：在事务提交时将缓冲区的 redo 日志异步写入到磁盘，即不能完全保证 commit 时肯定会写入 redo 日志文件，只是有这个动作。
 
 ###### undo log
+
+​	undo log是一种**逻辑日志**，可以认为当delete一条记录时，undo log会记录对应的insert记录。当update一条记录时，它记录一条对应相反的update记录。
 
 ​	是一种用于撤销回退的日志，用于事务没提交之前，会先记录存放到 Undo 日志文件里，当事务回滚时或者数据库崩溃时，可以利用 Undo 日志回退事务
 
@@ -1500,6 +1504,40 @@ binlog有三种格式：Statement、Row以及Mixed。
 
 - Mixed
   在Mixed模式下，一般的语句修改使用statment格式保存binlog，如一些函数，statement无法完成主从复制的操作，则采用row格式保存binlog，MySQL会根据执行的每一条具体的sql语句来区分对待记录的日志形式，也就是在Statement和Row之间选择一种。
+
+[崩溃恢复](https://www.cnblogs.com/xinysu/p/6586386.html)
+
+![mysql宕机恢复](../Image/question/mysql宕机恢复.jpg)
+
+1. redo log恢复
+
+   1. 打开系统表空间ibdata，读取第一个page中的LSN，若第一个页损坏，则依次往后面的page读，知道有个完整的page能够提供LSN，这个LSN当作上次shutdown时的checkpoint点，后续恢复，从这个LSN点开始恢复
+   2. 进入redo log文件，读取第一个redo log文件头的checkpoint LSN， 并根据该LSN定位到redo日志文件中对应的位置，从该checkpoint点开始扫描，进行3次redo log文件扫描：
+      1. **找 MLOG_CHECKPOINT日志**
+         - 如果是正常关闭，这个日志是不做记录的，也就是扫描的过程中不回找到对应的MLOG_CHECKPOINT日志，不会进行接下来的两次扫描，因为属于正常关闭数据库服务，不需要考虑奔溃恢复情况；
+         - 如果是非正常关闭，则会查找到 MLOG_CHECKPOINT （如果是多个，则说明redo文件已损坏，恢复报错），获取MLOG_FILE_NAME中指定后续需要恢复的ibd文件；
+      2. **从redo log读到的LSN，找到checkpoint点开始重复扫描存储日志对象**
+         - 根据MLOG_CHECKPOINT日志，读取对应LSN之后的日志解析到hash表中，如果剩下的日志解析结束后还没有填满hash表格，则不需要进行第三次扫描；
+         - 进行到这里，则说明数据库是非正常关闭，会在errorlog中提示：Database was not shutdown normally!详见下图。
+           ![CMD](../Image/question/mysql崩溃恢复命令行.png)
+      3. **若第二次扫描hash表空间不足，则发起第三次扫描，清空hash表空间，重新从新的checkpoint点开始扫描**
+
+   > 改进：根据hash表中的相应信息读取数据页， 读数据页的时候，5.7之前版本采用把所有表空间都打开，所有表格仅执行ReadOnly，5.7版本做了优化，新增了 `MLOG_FILE_NAME` 记录在checkpoint之后，所有被修改过的信息，根据这些信息，在恢复过程中，只需要打开相应的ibd文件即可，不涉及恢复的表格支持正常DML跟DDL操作，涉及恢复的表格则仅执行ReadOnly功能。
+   >
+   > 当把数据页读取到buffer pool中，以往版本是只读取对应的**单个页面**，而现在的是直接读取与该页面相邻的32个data page 也一起加载的buffer pool，因为一个数据页的修改，可能周围的页面也被修改，一次性读取，可以避免后面根据hash表中再重新读取其相邻的页面。
+
+2. undo log binlog处理
+
+   上一阶段中，把redo log中的操作都apply到数据页中，但是对于prepare状态的事务却还没有进行回滚处理，这个阶段则是针对prepare状态的事务进行处理，需要使用到binlog和undo log。
+
+   1. 根据最后一个binlog文件，为啥不是所有binlog文件呢？因为每一个binlog文件切换的时候，都会确保当前binlog文件的所有操作已落盘，所以只需要考虑最后一个binlog文件。跟进最后一个binlog文件，获取所有**可能**没有提交事务的xid列表
+
+   2. 根据undo log中的 insert_undo_list，upddate_undo_list事务链，构建undo_list，在根据undo_list构建未提交事务链表;
+
+   3. 从未提交事务链表中，提取出xid，凡是存在于xid列表中的，则需要提交，不存在的，则回滚。
+
+      > 在事务执行过程可以看出，在事务提交之前，会先写binlog，然后提交。提交之后的事务不存在undo信息，所以既在binlog中出现的事务又在undo log中的事务，即可以说当前事务是在完成后准备提交状态宕机打断，所以可以提交，而不再binlog的事务，只能回滚。
+
 
 ##### mysql隐藏字段
 

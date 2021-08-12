@@ -1782,7 +1782,7 @@ MysQL复制过程分成三步：
 
 ##### InnoDB框架
 
-![体系结构](../Image/mysql/image-20210801180451890.png)
+![体系结构](../Image/question/innodb-architecture.png)
 
 ##### Redo log原理
 
