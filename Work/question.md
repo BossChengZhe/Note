@@ -264,8 +264,8 @@ TCP协议为了实现可靠传输，在三次握手的实现过程中设置了�
 
 1. Client Hello：客户端发起请求，以明文传输请求信息，包含版本信息，加密套件候选列表，压缩算法候选列表，随机数，扩展字段等信息
 2. Server Hello ：服务端返回协商的信息结果，包括选择使用的协议版本 version，选择的加密套件 cipher suite，选择的压缩算法 compression method、随机数 random_S 等，其中随机数用于后续的密钥协商;
-3. Certificate：
-4. Server Key Exchange
+3. Certificate：服务器发送一个证书或一个证书链到客户端，一个证书链开始于服务器公共钥匙证书并结束于证明权威的根证书。这个消息是可选的，但服务器证书需要时，必须使用它。
+4. Server Key Exchange：服务器当发送来的公共钥匙对钥匙交换不是很充分时，发送一个服务器钥匙交换消息。
 5. Server Hello Done ：通知客户端 server_hello 信息发送结束;
 6. Client Key Exchange ：合法性验证通过之后，客户端计算产生随机数字 Pre-master，并用证书公钥加密，发送给服务器;
 7. Application Data Protocol: http-over-tls 业务数据安全传输
@@ -1618,12 +1618,11 @@ buffer pool大小默认为128MB，链表中存储的均为控制块，指向buff
 ###### undo log
 
 	undo log是一种**逻辑日志**，可以认为当delete一条记录时，undo log会记录对应的insert记录。当update一条记录时，它记录一条对应相反的update记录。
-	
 	是一种用于撤销回退的日志，用于事务没提交之前，会先记录存放到 Undo 日志文件里，当事务回滚时或者数据库崩溃时，可以利用 Undo 日志回退事务
 
 ###### binlog
 
-	binlog,即二进制日志,它记录了数据库上的所有改变，并以二进制的形式保存在磁盘中；它可以用来查看数据库的变更历史、数据库增量备份和恢复、Mysql的复制（主从数据库的复制）。
+binlog,即二进制日志,它记录了数据库上的所有改变，并以二进制的形式保存在磁盘中；它可以用来查看数据库的变更历史、数据库增量备份和恢复、Mysql的复制（主从数据库的复制）。
 
 ###### redo log和binlog的区别
 
