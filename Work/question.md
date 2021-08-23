@@ -260,15 +260,57 @@ TCP协议为了实现可靠传输，在三次握手的实现过程中设置了�
 
 ###### SSL握手过程
 
-![image-20210817164135816](../Image/question/image-20210817164135816.png)
+![image-20210817164135816](../Image/question/SSL握手过程.svg)
 
 1. Client Hello：客户端发起请求，以明文传输请求信息，包含版本信息，加密套件候选列表，压缩算法候选列表，随机数，扩展字段等信息
-2. Server Hello ：服务端返回协商的信息结果，包括选择使用的协议版本 version，选择的加密套件 cipher suite，选择的压缩算法 compression method、随机数 random_S 等，其中随机数用于后续的密钥协商;
-3. Certificate：服务器发送一个证书或一个证书链到客户端，一个证书链开始于服务器公共钥匙证书并结束于证明权威的根证书。这个消息是可选的，但服务器证书需要时，必须使用它。
-4. Server Key Exchange：服务器当发送来的公共钥匙对钥匙交换不是很充分时，发送一个服务器钥匙交换消息。
-5. Server Hello Done ：通知客户端 server_hello 信息发送结束;
-6. Client Key Exchange ：合法性验证通过之后，客户端计算产生随机数字 Pre-master，并用证书公钥加密，发送给服务器;
-7. Application Data Protocol: http-over-tls 业务数据安全传输
+
+2. Server Hello ：服务端返回协商的信息结果，
+
+   - version：包括选择使用的协议版本 
+   - cipher suite：选择的加密套件
+   - compression method：选择的压缩算法
+   - random_S随机数等，其中随机数用于后续的密钥协商;
+
+3. Certificate：服务器发送一个证书或一个证书链到客户端，一个证书链开始于服务器公共钥匙证书并结束于证明权威的根证书。这个消息是可选的，但服务器证书需要时，必须使用它。主要目的是验证服务器是否合法。
+
+4. Server Key Exchange：**该帧只存在于秘钥交换算法（Key Exchange）为 DH 或 ECDH 的帧中。如果秘钥交换算法为 RSA，那么此帧不存在**。
+
+5. Certificate Request：该帧存在于双向验证过程中，用于请求客户端证书。
+
+6. Server Hello Done ：通知客户端 server_hello 信息发送结束;
+
+7. Client Key Exchange 
+
+   - RSA key exchange：
+     1. 客户端产生预主秘钥（*pre-master secret*)，使用从服务器证书中得到的公钥（*public key*）加密预主秘钥后发往服务器；
+     2. 服务器收到加密后的预主秘钥后，使用其私钥将其解密。
+     3. 此时，客户端和服务器都有**客户端随机数，服务器随机数，预主秘钥**。双方使用这三者产生通信过程中的主秘钥（*master secret*）；
+     4. 双方互相发送 `Change Cipher Spec` 和 `Encrypted Handshake Message`。
+   - DH（ECDH）Key Exchange：
+     1. 服务器使用其私钥将客户端随机数，服务器随机数，服务器 DH（ECDH）参数签名，生成服务器签名，发向客户端（`Server Key Exchange`）；
+     2. 客户端使用服务器发送过来的公钥和签名得到服务器 DH 参数；
+     3. 客户端向服务器发送 DH 参数（`Client Key Exchange`)；
+     4. 双方使用客户端 DH 参数，服务器 DH 参数生成预主秘钥。然后使用客户端随机数，服务器随机数，预主秘钥产生主秘钥；
+     5. 双方互相发送 `Change Cipher Spec` 和 `Encrypted Handshake Message`。
+
+8. Certificate Verify：
+
+   该帧存在于双向验证过程中，用于客户端自证该证书属于客户端。
+
+9. Change Cipher Spec
+
+   客户端告知服务器，客户端已经生成了主秘钥，并且后续的通信将使用该秘钥进行加密。
+
+10. Encrypted Handshake Message：
+    这是客户端使用主秘钥加密的第一个数据，发向服务器。服务器使用此消息验证自身生成的主秘钥的正确性。
+
+11. Change Cipher Spec
+    服务器告知客户端，服务器已经生成了主秘钥，并且后续的通信将使用该秘钥进行加密。
+
+12. Encrypted Handshake Message：
+    这是服务器使用主秘钥加密的第一个数据，发向客户端。客户端使用此消息验证自身生成的主秘钥的正确性。
+
+13. Application Data Protocol: http-over-tls：业务数据安全传输
 
 ###### http请求包含哪些内容
 
@@ -716,7 +758,7 @@ g++ RValueReference.cpp -o RValueReference -fno-elide-constructors # 去掉编�
 
 ##### C++运行相关
 
-###### C++编译运行的过 程
+###### C++编译运行的过程
 
 C+和C语言类似，一个C++程序从源码到执行文件，有四个过程，预编译、编译、汇编、链接.
 
@@ -761,7 +803,8 @@ C+和C语言类似，一个C++程序从源码到执行文件，有四个过程�
 2. 函数调用
    1. push指令：将函数参数从右往左依次压栈
    2. call指令，跳转到函数处
-   3. 
+3. 现场保存
+   1. 将
 
 ###### 动态链接库的原理
 
@@ -848,11 +891,10 @@ C+和C语言类似，一个C++程序从源码到执行文件，有四个过程�
 
    - 找出待排序的数组中最大和最小的元素；
    
-- 统计数组中每个值为i的元素出现的次数，存入数组C的第i项；
-  
+   - 统计数组中每个值为i的元素出现的次数，存入数组C的第i项；
    - 对所有的计数累加（从C中的第一个元素开始，每一项和前一项相加）；
    
-- 反向填充目标数组：将每个元素i放在新数组的第C(i)项，每放一个元素就将C(i)减去1。
+   - 反向填充目标数组：将每个元素i放在新数组的第C(i)项，每放一个元素就将C(i)减去1。
 
 ![计数排序](../image/计数排序.gif)
 
