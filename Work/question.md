@@ -460,7 +460,7 @@ C++是面向对象的语言，而C是面向过程的结构化编程语言
 
 ###### C++ 11新特性
 
-[参考博客](https://blog.csdn.net/zhanglu_1024/article/details/85049480?utm_medium=distribute.pc_relevant.none-task-blog-baidujs_baidulandingword-0&spm=1001.2101.3001.4242)
+[参考博客](https://blog.csdn.net/jiange_zh/article/details/79356417)
 
 1. 关键字以及语法
    - auto关键字：编译器根据上下文情况，确定auto变量的真正类型
@@ -600,7 +600,10 @@ strcpy函数并不检查目的缓冲区的大小边界，而是将源字符串�
 由于结合优先级的问题，分别对两个分析
 
 - `int *p[10]`
-  1. 首先在优先级上，`*`和`[]`优先级相同，那么
+
+  首先在优先级上，`*`和`[]`优先级相同，平级在优先级中是遵循向右看齐的原则，所以p是离[]近，到此 我们可以确定p是一个数组，他有10个元素。将p[10]看作一个整体的的到 int *A;可知道数组p中的每一个元素是指向一个int 类型的变量的指针。所以int *p[10]是一个指向整形变量的指针数组。
+
+- `int (*p)[10]`：我们声明了一个变量q，由于有()所以q离 *近，可以确定变量q是一个指针。我们把(*q)看成一个整体得 int A[10], 到此我们可以确定 q是一个指向一个int类型的数组的指针。所以int(* q)[10]是指向一个数组的指针，即数组指针。
 
 ###### malloc细节(需要补充)
 
@@ -742,6 +745,92 @@ const名叫常量限定符，用来限定特定变量，以通知编译器该变
   >
   > 1. 重载操作符时
   > 2. 确定指向对象不会改变时
+
+###### [强制类型转换](https://www.cnblogs.com/Allen-rg/p/6999360.html)
+
+1. `static_cast`：数据类型的强制转换，强制将一种数据类型转换为另一种数据类型。
+
+   1. 数据类型的强制转换，强制将一种数据类型转换为另一种数据类型。
+      - 进行上行转换（把派生类的指针或引用转换成基类表示）是安全的
+      - 进行下行转换（把基类的指针或引用转换为派生类表示），由于没有动态类型检查，所以是不安全的
+   2. 用于基本数据类型之间的转换，如把int转换成char。这种转换的安全也要开发人员来保证
+   3. 把空指针转换成目标类型的空指针
+   4. 把任何类型的表达式转换为void类型
+
+2. `const_cast`：const_cast则正是用于强制去掉这种不能被修改的常数特性，但需要特别注意的是const_cast不是用于去除变量的常量性，而是去除指向常数对象的指针或引用的常量性，其去除常量性的对象必须为指针或引用。
+
+   ```c++
+   #include<iostream>
+   using namespace std;
+    
+   int main()
+   {
+       const int a = 10;
+       const int * p = &a;
+       int *q;
+       q = const_cast<int *>(p);
+       *q = 20;    //fine
+       cout << a <<" "<< *p <<" "<< *q <<endl;  // 10 20 20
+       cout <<&a<<" "<<p<<" "<<q<<endl;         // 地址相同
+       return 0;
+   }
+   ```
+
+   变量a一开始就被声明为一个常量变量，不管后面的程序怎么处理，它就是一个常量，就是不会变化的
+
+   ```c++
+   #include<iostream>
+   using namespace std;
+    
+   const int * Search(const int * a, int n, int val);
+    
+   int main()
+   {
+       int a[10] = {0,1,2,3,4,5,6,7,8,9};
+       int val = 5;
+       int *p;
+       p = const_cast<int *>(Search(a, 10, val));
+       if(p == NULL)
+           cout<<"Not found the val in array a"<<endl;
+       else
+           cout<<"hvae found the val in array a and the val = "<<*p<<endl;
+       return 0;
+   }
+    
+   const int * Search(const int * a, int n, int val)
+   {
+       int i;
+       for(i=0; i<n; i++)
+       {
+           if(a[i] == val)
+               return &a[i];
+       }
+       return  NULL;
+   }
+   ```
+
+   我们定义了一个函数，用于在a数组中寻找val值，如果找到了就返回该值的地址，如果没有找到则返回NULL。函数Search返回值是const指针，当我们在a数组中找到了val值的时候，我们会返回val的地址，最关键的是a数组在main函数中并不是const，因此即使我们去掉返回值的常量性有可能会造成a数组被修改，但是这也依然是安全的。
+
+   了解了const_cast的使用场景后，**可以知道使用const_cast通常是一种无奈之举**，同时也建议大家在今后的C++程序设计过程中一定不要利用const_cast去掉指针或引用的常量性并且去修改原始变量的数值，这是一种非常不好的行为。
+
+3. `reinterpret_cast`:**改变指针或引用的类型、将指针或引用转换为一个足够长度的整形、将整型转换为指针或引用类型**。
+
+4. `dynamic_cast`：
+
+   1. 其他三种都是编译时完成的，dynamic_cast是运行时处理的，运行时要进行类型检查。
+
+   2. 不能用于内置的基本数据类型的强制转换。
+
+   3. **dynamic_cast转换如果成功的话返回的是指向类的指针或引用，转换失败的话则会返回NULL。**
+
+   4. 使用dynamic_cast进行转换的，基类中一定要有虚函数，否则编译不通过。
+      需要检测有虚函数的原因：类中存在虚函数，就说明它有想要让基类指针或引用指向派生类对象的情况，此时转换才有意义。
+
+   5. 在类的转换时，在类层次间进行上行转换时，dynamic_cast和static_cast的效果是一样的。在进行下行转换时，dynamic_cast具有类型检查的功能，比static_cast更安全。
+      **在C++中，编译期的类型转换有可能会在运行时出现错误，特别是涉及到类对象的指针或引用操作时，更容易产生错误。Dynamic_cast操作符则可以在运行期对可能产生问题的类型转换进行测试。**
+      **dynamic_cast还要求<>内部所描述的目标类型必须为指针或引用。**
+
+      > 下行转换时，会发生什么事情，比如说父类中没有的成员变量？
 
 ##### 面向对象相关
 
@@ -1821,8 +1910,6 @@ binlog有三种格式：Statement、Row以及Mixed。
    2. 若row的`trx_id`不在数组中，表示这个版本是已经提交了的事务生成的，可见.
 
 > 对于删除的情况可以认为是update的特殊情况，会将版本链上最新的数据复制一份，然后将trx id修改成删除操作的trx id，同时在该条记录的头信息(record header)里的(deleted flaq)标记位写上true，来表示当前记录已经被删除，在查询时按照上面的规则查到对应的记录如果delete flag标记位为true，意味看记录已被删除，则不返回数据。
-
-
 
 ##### 索引
 
