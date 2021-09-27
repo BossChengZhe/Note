@@ -500,7 +500,7 @@ C++是面向对象的语言，而C是面向过程的结构化编程语言
 [参考博客](https://blog.csdn.net/jiange_zh/article/details/79356417)
 
 1. 关键字以及语法
-   - auto关键字：编译器根据上下文情况，确定auto变量的真正类型
+   - auto关键字：编译器根据上下文情况，确定auto变量的真正类型   
    - nullptr：空指针，避免NULL所引起的歧义
    - for循环语法
 2. STL容器：
